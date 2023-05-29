@@ -1,0 +1,48 @@
+<!-- activity_game_over.xml -->
+
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/endless_runner"
+    android:gravity="center">
+
+    <TextView
+        android:id="@+id/gameOverText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="GAME OVER"
+        android:textSize="24sp"
+        android:textColor="#FFF"
+        android:layout_centerHorizontal="true"
+        android:layout_marginBottom="40dp" />
+
+    <Button
+        android:id="@+id/backButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Back to Menu"
+        android:textColor="#FFFFFF"
+        android:background="#FF0000"
+        android:layout_below="@id/gameOverText"
+        android:layout_alignParentStart="true"
+        android:layout_marginTop="32dp"
+        android:layout_marginStart="32dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="16dp" />
+
+    <Button
+        android:id="@+id/retryButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Retry"
+        android:textColor="#FFFFFF"
+        android:background="#FF0000"
+        android:layout_below="@id/gameOverText"
+        android:layout_alignParentEnd="true"
+        android:layout_marginTop="32dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="32dp"
+        android:layout_marginBottom="16dp" />
+
+</RelativeLayout>
