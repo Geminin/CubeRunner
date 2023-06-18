@@ -64,5 +64,8 @@ public class CubeCharacterView extends androidx.appcompat.widget.AppCompatImageV
         canvas.drawRect(halfWidth - 20, halfHeight - 20, halfWidth + 20, halfHeight + 20, characterPaint);
     }
 
+    public CubeCharacterView get() {
+        return null;
+    }
 }
 

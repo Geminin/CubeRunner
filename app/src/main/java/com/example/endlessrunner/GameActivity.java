@@ -1,13 +1,19 @@
 package com.example.endlessrunner;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.Handler;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.FrameLayout;
@@ -15,29 +21,57 @@ import android.widget.ImageView;
 
 import androidx.annotation.NonNull;
 
+import java.lang.ref.WeakReference;
 import java.util.Random;
 
-public class GameActivity extends Activity {
+public class GameActivity extends Activity implements SensorEventListener {
 
+    private static final float GRAVITY = 100;
     private FrameLayout gameLayout;
     private CubeCharacterView cubeCharacterView;
+    private boolean isRedColor = true;
     private Handler handler;
+
+    private boolean isJumping;
+    private long jumpStartTime;
+    private float initialJumpY;
+
+    private static final int JUMP_DURATION = 1000; // Adjust the jump duration as needed
+    private static final float JUMP_HEIGHT = 300; // Adjust the jump height as needed
+
+    private SensorManager sensorManager;
+    private Sensor accelerometer;
+    private boolean shakeDetected;
+    private static final float SHAKE_THRESHOLD = 15.0f; // Adjust the shake threshold as needed
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_game);
 
+        sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+
         gameLayout = findViewById(R.id.gameLayout);
 
         cubeCharacterView = new CubeCharacterView(this);
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
+                100, // Set the width of the character as needed
                 100 // Set the height of the character as needed
         );
-        params.leftMargin = -800; // Set the left margin as needed
-        params.topMargin = 1710; // Set the top margin as needed
+        params.leftMargin = 100; // Set the left margin as needed
+        params.topMargin = 1810; // Set the top margin as needed
         gameLayout.addView(cubeCharacterView, params);
+
+        handler = new Handler(); // Initialize the handler
+        cubeCharacterView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (!isJumping) {
+                    jump();
+                }
+            }
+        });
     }
 
     @Override
@@ -59,9 +93,6 @@ public class GameActivity extends Activity {
         final int[] obstacleHeights = {80, gameLayout.getHeight(), gameLayout.getHeight()}; // Heights for each obstacle type
         final boolean[] collisionEnabled = {false};
         final Paint obstaclePaint = new Paint();
-
-        final Handler handler = new Handler();
-        final Handler obstacleHandler = new Handler(); // Add this line to initialize the obstacleHandler
 
         Runnable obstacleCreationRunnable = new Runnable() {
             @Override
@@ -90,21 +121,20 @@ public class GameActivity extends Activity {
                         FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT
                 );
                 obstacleParams.leftMargin = gameLayout.getWidth(); // Set the initial horizontal position of the obstacle
-                obstacleParams.topMargin = 1810 - obstacleHeights[obstacleType]; // Set the vertical position of the obstacle
+                obstacleParams.topMargin = 1910 - obstacleHeights[obstacleType]; // Set the vertical position of the obstacle
 
                 // Add the obstacle image view to the game layout
                 gameLayout.addView(obstacleImageView, obstacleParams);
 
                 // Move the obstacle from right to left
-                Handler obstacleHandler = new Handler();
+                final Handler obstacleHandler = new Handler();
                 Runnable obstacleMovementRunnable = new Runnable() {
                     @Override
                     public void run() {
-                        obstacleParams.leftMargin += obstacleSpeed; // Adjust the movement speed as needed
+                        obstacleParams.leftMargin += obstacleSpeed;
 
                         // Check if the obstacle has gone off the screen
                         if (obstacleParams.leftMargin + obstacleWidths[obstacleType] < 0) {
-                            // Remove the obstacle image view from the game layout
                             gameLayout.removeView(obstacleImageView);
                             return;
                         }
@@ -113,14 +143,16 @@ public class GameActivity extends Activity {
 
                         // Check for collision with character
                         if (isColliding(obstacleImageView)) {
-                            // Check the color of the obstacle and character
-                            if (obstacleType != obstacleTypeGreen || CubeCharacterView.getColor() != obstacleColors[obstacleType]) {
-                                // Character collided with an obstacle of a different color
+                            int characterColor = cubeCharacterView.getColor();
+                            int obstacleColor = obstacleColors[obstacleType];
+
+                            // Check if the character and obstacle have the same color
+                            if (characterColor != obstacleColor) {
                                 handleCollision();
+                                return;
                             }
                         }
 
-                        // Call the runnable again after a certain delay (e.g., 16 milliseconds for smooth movement)
                         obstacleHandler.postDelayed(this, 16);
                     }
                 };
@@ -134,9 +166,8 @@ public class GameActivity extends Activity {
         };
 
         // Delay the start of the obstacle creation loop
-        handler.postDelayed(obstacleCreationRunnable, 2000); // Adjust the delay time as needed
+        handler.postDelayed(obstacleCreationRunnable, 1000); // Adjust the delay time as needed
     }
-
 
     private boolean isColliding(@NonNull View obstacleView) {
         int[] charLocation = new int[2];
@@ -158,9 +189,8 @@ public class GameActivity extends Activity {
     }
 
     private void handleCollision() {
-        // Remove callbacks and messages from the obstacleHandler
-        Handler obstacleHandler = new Handler();
-        obstacleHandler.removeCallbacksAndMessages(null);
+        // Remove callbacks and messages from the handler
+        handler.removeCallbacksAndMessages(null);
 
         // Add your collision handling logic here
 
@@ -176,18 +206,106 @@ public class GameActivity extends Activity {
                 // Handle menu button click to go back to the menu screen
                 Intent intent = new Intent(GameActivity.this, MainActivity.class);
                 startActivity(intent);
-
             }
         });
 
         retryButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                // Handle retry button click to restart the game
-                recreate(); // Restart the current activity
+                Intent intent = new Intent(GameActivity.this, GameActivity.class);
+                startActivity(intent);
+                finish();
             }
         });
     }
 
+    private void jump() {
+        if (!isJumping) {
+            isJumping = true;
+            jumpStartTime = System.currentTimeMillis();
+            initialJumpY = cubeCharacterView.getY();
+            jumpAnimation();
+        }
+    }
 
+    private void jumpAnimation() {
+        final long elapsedTime = System.currentTimeMillis() - jumpStartTime;
+        if (elapsedTime <= JUMP_DURATION) {
+            float jumpProgress = (float) elapsedTime / JUMP_DURATION;
+            float jumpOffset = JUMP_HEIGHT * (1 - (float) Math.pow(jumpProgress - 1, 2));
+
+            // Apply gravity effect for smooth fall
+            float gravity = GRAVITY * elapsedTime / JUMP_DURATION;
+            float fallOffset = gravity * (float) Math.pow(jumpProgress, 2);
+
+            float totalOffset = jumpOffset - fallOffset;
+            cubeCharacterView.setY(initialJumpY - totalOffset);
+            handler.postDelayed(this::jumpAnimation, 16);
+        } else {
+            cubeCharacterView.setY(initialJumpY);
+            isJumping = false;
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+
+
+
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        sensorManager.unregisterListener(this);
+    }
+
+
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+
+        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            float x = event.values[0];
+            float y = event.values[1];
+            float z = event.values[2];
+
+            float acceleration = (float) Math.sqrt(x * x + y * y + z * z);
+            Log.d("a", String.valueOf(acceleration));
+
+
+            if (acceleration > SHAKE_THRESHOLD) {
+                // Shake detected, perform your desired action here
+                handleShake();
+            }
+        }
+
+        // Check if the acceleration exceeds the shake threshold
+
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int i) {
+        // not used
+    }
+
+    private void handleShake() {
+
+        //setContentView(R.layout.activity_game_over);
+
+
+
+
+        CubeCharacterView characterView = cubeCharacterView.get();
+        if (characterView != null) {
+            if (isRedColor) {
+                characterView.setColor(Color.BLUE);
+            } else {
+                characterView.setColor(Color.RED);
+            }
+            isRedColor = !isRedColor;
+            characterView.invalidate(); // Force the view to redraw
+        }
+    }
 }
